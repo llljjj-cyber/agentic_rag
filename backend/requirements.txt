@@ -4,6 +4,7 @@ fastapi==0.139.0
 uvicorn==0.51.0
 python-multipart==0.0.32
 python-dotenv==1.2.2
+pydantic-settings==2.14.2
 
 # Database
 sqlalchemy==2.0.51

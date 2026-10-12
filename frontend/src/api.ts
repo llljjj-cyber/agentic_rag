@@ -148,6 +148,62 @@ export async function getSource(token: string, sourceId: string): Promise<Source
   return data.source;
 }
 
+export type SourceDetailResult =
+  | { kind: "busy"; status: "pending" | "processing" }
+  | { kind: "ready"; source: SourceMeta }
+  | { kind: "failed"; message: string };
+
+export async function getSourceDetail(token: string, sourceId: string): Promise<SourceDetailResult> {
+  const res = await fetch(`${API}/sources/${sourceId}/detail`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json().catch(() => ({}));
+
+  if (res.status === 500) {
+    return {
+      kind: "failed",
+      message: formatApiDetail((data as { detail?: unknown }).detail, "入库失败"),
+    };
+  }
+  if (!res.ok) {
+    const error = new Error(
+      formatApiDetail((data as { detail?: unknown }).detail, `请求失败（${res.status}）`),
+    );
+    (error as Error & { status?: number }).status = res.status;
+    throw error;
+  }
+
+  const status = (data as { status?: string }).status;
+  if (status === "pending" || status === "processing") {
+    return { kind: "busy", status };
+  }
+
+  const source = (data as { source?: SourceMeta }).source;
+  if (source?.id) {
+    return { kind: "ready", source: { ...source, status: source.status ?? "ready" } };
+  }
+
+  return { kind: "failed", message: "未返回资料详情" };
+}
+
+const POLL_INTERVAL_MS = 2500;
+const POLL_MAX_ATTEMPTS = 72; // ~3 minutes
+
+export async function waitForSourceReady(
+  token: string,
+  sourceId: string,
+): Promise<SourceMeta> {
+  for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
+    const result = await getSourceDetail(token, sourceId);
+    if (result.kind === "ready") return result.source;
+    if (result.kind === "failed") {
+      throw new Error(result.message);
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+  throw new Error("入库超时，请稍后在知识库中查看");
+}
+
 export type IngestInput =
   | { kind: "text"; title: string; text: string; shelf_id?: string | null }
   | { kind: "url"; url: string; title?: string; shelf_id?: string | null }

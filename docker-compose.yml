@@ -30,7 +30,7 @@ services:
       ALLOWED_ORIGINS: http://8.138.96.81:8080,http://localhost:8080,http://127.0.0.1:8080
     volumes:
       - ${BGE_MODEL_PATH_HOST}:/models/bge-m3:ro
-      - ./backend/services/rag/tempo/uploads:/app/services/rag/tempo/uploads
+      - ./backend/infrastructure/rag/temp/uploads:/app/backend/infrastructure/rag/temp/uploads
       - ~/nltk_data:/root/nltk_data   
     depends_on:
       postgres-db:

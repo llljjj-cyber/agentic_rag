@@ -17,6 +17,7 @@ import {
   listMessages,
   READABLE_MODALITIES,
   streamChat,
+  waitForSourceReady,
   type ChatMessage,
   type Conversation,
   type IngestInput,
@@ -420,14 +421,26 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     void (async () => {
       try {
         const source = await ingestSource(token, input);
-        setIngestJobs((jobs) =>
-          jobs.map((job) => (job.id === jobId ? { ...job, status: "success" } : job)),
-        );
-        await refreshSpace();
-        await refreshShelves().catch(() => undefined);
-        if (READABLE_MODALITIES.has(source.modality)) {
-          openReader(source);
+
+        if (input.kind === "file") {
+          // 文件走异步入库：接单后轮询 detail，完成前保持「处理中」
+          await waitForSourceReady(token, source.id);
+          setIngestJobs((jobs) =>
+            jobs.map((job) => (job.id === jobId ? { ...job, status: "success" } : job)),
+          );
+          await refreshSpace();
+          await refreshShelves().catch(() => undefined);
+        } else {
+          setIngestJobs((jobs) =>
+            jobs.map((job) => (job.id === jobId ? { ...job, status: "success" } : job)),
+          );
+          await refreshSpace();
+          await refreshShelves().catch(() => undefined);
+          if (READABLE_MODALITIES.has(source.modality)) {
+            openReader(source);
+          }
         }
+
         window.setTimeout(() => {
           setIngestJobs((jobs) => jobs.filter((job) => job.id !== jobId));
         }, 4500);

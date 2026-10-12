@@ -42,7 +42,7 @@ postgres-db (pgvector)
 
 - 数据库连接串由 compose 注入：`DATABASE_URL=postgresql+asyncpg://...@postgres-db:5432/...`
 - 本地 BGE 模型挂载：`${BGE_MODEL_PATH_HOST}` → 容器内 `/models/bge-m3`
-- 上传文件持久化：`./backend/services/rag/tempo/uploads`
+- 上传文件持久化：`./backend/infrastructure/rag/temp/uploads`（容器内 `/app/backend/infrastructure/rag/temp/uploads`）
 
 ## 启动后验证
 

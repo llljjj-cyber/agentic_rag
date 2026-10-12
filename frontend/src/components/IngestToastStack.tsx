@@ -13,7 +13,7 @@ type Props = {
 };
 
 function statusLine(job: IngestJob) {
-  if (job.status === "processing") return "正在解析与向量化…";
+  if (job.status === "processing") return "已受理，正在解析与向量化…";
   if (job.status === "success") return "已入库，知识空间已更新";
   return job.message || "入库失败";
 }

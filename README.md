@@ -30,7 +30,7 @@ multimodal_agentic_rag/
 │   ├── routers/                # auth / sources / chat / conversations / shelves
 │   ├── services/
 │   │   ├── rag/                # 入库、嵌入、检索、空间投影
-│   │   └── agentic_rag_agent/  # ADK Agent 定义与运行
+│   │   └── agent/  # ADK Agent 定义与运行
 │   └── eval/                   # RAG 检索评测脚本
 ├── frontend/
 │   └── src/
