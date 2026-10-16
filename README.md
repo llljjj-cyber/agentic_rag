@@ -4,7 +4,6 @@
 ![Meridian 效果图](asset/效果图.png)
 本项目参考了 [multimodal_agentic_rag](https://github.com/Shubhamsaboo/awesome-llm-apps/tree/main/rag_tutorials/multimodal_agentic_rag) 的实现思路。
 
-**线上演示：** [http://8.138.96.81:8080](http://8.138.96.81:8080)  (演示账号：meri / 密码：meridian)
 
 ## 技术栈
 
