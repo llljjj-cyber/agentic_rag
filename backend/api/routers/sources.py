@@ -9,7 +9,6 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.services.source_service import auto_add_source, delete_total_source, get_total_source, update_source_shelf, update_source_title
-from backend.infrastructure.rag import store
 
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
@@ -17,10 +16,8 @@ from starlette.concurrency import run_in_threadpool
 
 from backend.config import settings
 from backend.services.snapshot_service import get_space_snapshot
-from backend.infrastructure.db.database import get_db
-from backend.infrastructure.db import crud
 from backend.api.schemas import SourceMoveToShelfRequest, SourceOut, SourceRenameRequest, TextSourceRequest, UrlSourceRequest, User
-from backend.api.deps.auth import get_current_user
+from backend.api.deps import get_current_user
 
 
 ALLOWED_SUFFIX = {".pdf", ".md", ".txt"}
@@ -66,7 +63,6 @@ async def add_text_source(
             raise HTTPException(400, "text is empty")
         payload = {
             "user_id": user.id,
-            "source_id": str(uuid.uuid4().hex[:10]),
             "saved_path": None,
             "modality": req.modality,
             "title": req.title,
@@ -78,12 +74,12 @@ async def add_text_source(
         raise HTTPException(400, str(exc)) from exc
     if result["ok"]:
         source_out = SourceOut(
-            id=result["source_id"], 
-            title=result["title"], 
-            modality=result["modality"], 
-            shelf_id=result["shelf_id"], 
-            status=result["status"], 
-            created_at=result["created_at"]
+            id=result["id"],
+            title=result["title"],
+            modality=result["modality"],
+            shelf_id=result["shelf_id"],
+            status=result["status"],
+            created_at=result["created_at"],
         )
         return {"source": SourceOut.model_validate(source_out)}
     else:
@@ -108,7 +104,6 @@ async def add_url_source(
         title = req.title or url.replace("https://", "").replace("http://", "")[:80]
         payload = {
             "user_id": user.id,
-            "source_id": str(uuid.uuid4().hex[:10]),
             "saved_path": None,
             "modality": "url",
             "title": title,
@@ -118,12 +113,13 @@ async def add_url_source(
         result = await auto_add_source(payload)
         if result["ok"]:
             source_out = SourceOut(
-                id=result["source_id"], 
-                title=result["title"], 
-                modality=result["modality"], 
-                shelf_id=result["shelf_id"], 
-                status=result["status"], 
-                created_at=result["created_at"])
+                id=result["id"],
+                title=result["title"],
+                modality=result["modality"],
+                shelf_id=result["shelf_id"],
+                status=result["status"],
+                created_at=result["created_at"],
+            )
             return {"source": SourceOut.model_validate(source_out)}
         else:
             raise HTTPException(500, detail=result)
@@ -134,7 +130,6 @@ async def add_url_source(
 @router.post("/file")
 async def add_file_source(
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
     file: UploadFile = File(...),
     title: str | None = Form(None),
     shelf_id: str | None = Form(None),
@@ -154,10 +149,6 @@ async def add_file_source(
     upload_dir.mkdir(parents=True, exist_ok=True)
     safe_name = f"{uuid.uuid4().hex}{suffix}"
     saved_path = upload_dir / safe_name
-    if shelf_id:
-        shelf = await crud.get_shelf(db, shelf_id)
-        if not shelf or shelf.user_id != user.id:
-            raise HTTPException(404, "书架不存在")
 
     try:
         content = await file.read()
@@ -181,13 +172,13 @@ async def add_file_source(
     
     if result["ok"]:
         source_out = SourceOut(
-            id=result["source_id"], 
-            title=title, 
+            id=result["id"],
+            title=title,
             modality=modality,
             shelf_id=shelf_id,
             status=result["status"],
-            created_at=result["created_at"]
-            )
+            created_at=result["created_at"],
+        )
         return {"source": source_out}
     else:
         raise HTTPException(500, detail=result)

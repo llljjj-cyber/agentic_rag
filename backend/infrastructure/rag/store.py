@@ -16,6 +16,7 @@ from backend.infrastructure.db import crud
 from backend.infrastructure.db.models import SourceModel
 from backend.infrastructure.rag.embedding import get_bgem3_doc_embeddings
 from backend.infrastructure.rag.space import compute_centroid, rebuild_user_space
+from backend.core.circuit_breaker import with_circuit_breaker
 
 CHUNK_SIZE = 600         
 CHUNK_OVERLAP = 120       
@@ -135,6 +136,10 @@ def _pdf_to_md(file_path: str) -> Path:
             f.write(f"{doc.page_content}")
     return path
 
+async def _pdf_to_md_safe(path: str) -> Path:
+    async def _do():
+        return await run_in_threadpool(_pdf_to_md, path)
+    return await with_circuit_breaker("mineru", _do)
 
 def _normalize_content(doc: Document) -> str:
     """提取元素正文；表格优先用 metadata 里的 HTML。"""
@@ -325,7 +330,7 @@ async def add_file_source(
 
     else:
         if modality.lower() == "pdf":
-            md_path = str(await run_in_threadpool(_pdf_to_md, saved_path))
+            md_path = str(await _pdf_to_md_safe(saved_path))
         elif modality.lower() == "md":
             md_path = None
         else:

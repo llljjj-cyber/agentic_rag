@@ -1,4 +1,3 @@
-# Aligned with repo-root .venv (pip show), 2026-08-14
 # Web API
 fastapi==0.139.0
 uvicorn==0.51.0
@@ -10,6 +9,10 @@ pydantic-settings==2.14.2
 sqlalchemy==2.0.51
 asyncpg==0.31.0
 pgvector==0.5.0
+
+# Cache / queue
+redis==8.1.0
+aiokafka==0.14.0
 
 # Auth
 bcrypt==5.0.0
@@ -24,7 +27,7 @@ google-genai==2.11.0
 google-adk==2.4.0
 litellm==1.96.0
 
-# Embeddings (BGE-M3; prefer installing CPU torch first in Docker — see practice/05)
+# Embeddings (BGE-M3; CPU torch 由 Dockerfile 先行安装)
 FlagEmbedding==1.4.0
 
 # Document loading & chunking
@@ -33,5 +36,8 @@ langchain-community==0.4.1
 langchain-text-splitters==1.1.2
 langchain-mineru==0.1.3
 Markdown==3.10.3
-unstructured==0.18.32
+unstructured[md]==0.18.32
 pypdf==6.14.2
+
+# Metrics
+prometheus-client==0.22.0

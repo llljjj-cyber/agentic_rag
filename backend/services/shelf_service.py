@@ -3,7 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from backend.api.schemas import ShelfResponse
 from backend.infrastructure.db import crud
 from backend.infrastructure.db.database import async_session
-from backend.infrastructure.redis.shelf import delete_cached_shelves, get_cached_shelves
+from backend.infrastructure.redis.shelf import invalidate_shelf_related_caches, delete_cached_shelves, get_cached_shelves
 from backend.infrastructure.redis.space_snapshot import delete_cached_space_snapshot
 
 
@@ -55,7 +55,7 @@ async def delete_shelf(user_id: str, shelf_id: str) -> dict:
         shelf = await crud.get_shelf(session, shelf_id)
         if not shelf or shelf.user_id != user_id:
             return {"ok": False, "CODE": "SHELF_NOT_FOUND"}
+        source_ids = await crud.get_source_ids_by_shelf_id(session, shelf_id)
         await crud.delete_shelf(session, shelf=shelf)
-        await delete_cached_shelves(user_id)
-        await delete_cached_space_snapshot(user_id)
+        await invalidate_shelf_related_caches(user_id, source_ids)
         return {"ok": True, "deleted": shelf_id}

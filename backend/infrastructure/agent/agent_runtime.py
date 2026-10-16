@@ -9,10 +9,14 @@ from google.genai import types as genai_types
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
+from backend.core.circuit_breaker import CircuitOpenError
 from backend.infrastructure.rag.retriever import search_sources, search_chunks
 from backend.infrastructure.rag.retriever import retrieval_payload
 from backend.infrastructure.rag.space import space_tool
 from backend.infrastructure.db.database import SESSION_SERVICE
+from backend.infrastructure.metrics.metrics import RETRIEVAL_CALLS, RETRIEVAL_MATCHES
+from backend.core.circuit_breaker import before_call, on_failure, on_success
+from backend.infrastructure.redis.client import get_redis
 
 SETUP_ERROR = ""
 try:
@@ -84,27 +88,52 @@ def build_runner(
     state = AgentRunState()
 
     async def retrieve_relevant_sources(query: str, top_k: int = 6) -> dict:
-        results = await search_sources(db, user_id, query, top_k)
-        state.last_retrieval = results
-        state.trace.append({
-            "agent": "检索资料,粗颗粒度检索",
-            "status": "complete",
-            "detail": f"已检索到 {len(results['matches'])} 条资料（query={query!r}）",
-        })
-        return retrieval_payload(results)
+        try:
+            results = await search_sources(db, user_id, query, top_k)
+            n = len(results.get("matches") or [])
+            RETRIEVAL_CALLS.labels(tool="sources").inc()
+            RETRIEVAL_MATCHES.labels(tool="sources").observe(n)
+            state.last_retrieval = results
+            state.trace.append({
+                "agent": "检索资料,粗颗粒度检索",
+                "status": "complete",
+                "detail": f"已检索到 {len(results['matches'])} 条资料（query={query!r}）",
+            })
+            return retrieval_payload(results)
+        except CircuitOpenError as e:
+            RETRIEVAL_CALLS.labels(tool="sources").inc() 
+            return {
+            "matches": [],
+            "error": "embedding_unavailable",
+            "detail": str(e),
+        }
+
 
     async def retrieve_relevant_chunks(query: str, top_k: int = 6) -> dict:
-        results = await search_chunks(db, user_id, query, top_k)
-        state.last_retrieval = results
-        state.trace.append({
-            "agent": "检索证据,细颗粒度检索",
-            "status": "complete",
-            "detail": f"已检索到 {len(results['matches'])} 条证据（query={query!r}）",
-        })
-        return retrieval_payload(results)
-        
+        try:
+            results = await search_chunks(db, user_id, query, top_k)
+            n = len(results.get("matches") or [])
+            RETRIEVAL_CALLS.labels(tool="chunks").inc()
+            RETRIEVAL_MATCHES.labels(tool="chunks").observe(n)
+            state.last_retrieval = results
+            state.trace.append({
+                "agent": "检索证据,细颗粒度检索",
+                "status": "complete",
+                "detail": f"已检索到 {len(results['matches'])} 条证据（query={query!r}）",
+            })
+            return retrieval_payload(results)
+        except CircuitOpenError as e:
+            RETRIEVAL_CALLS.labels(tool="chunks").inc()
+            return {
+            "matches": [],
+            "error": "embedding_unavailable",
+            "detail": str(e),
+        }
+
     async def inspect_embedding_space() -> dict:
         space = await space_tool(db, user_id)
+        RETRIEVAL_CALLS.labels(tool="space").inc()
+        RETRIEVAL_MATCHES.labels(tool="space").observe(space.get("sources", 0))
         state.trace.append({
             "agent": "空间检查",
             "status": "complete",
@@ -148,5 +177,13 @@ async def stream_agent(
     if run_config is not None:
         kwargs["run_config"] = run_config
 
-    async for event in runner.run_async(**kwargs):
-        yield event
+    redis = get_redis()
+    await before_call(redis, "llm")
+    try:
+        async for event in runner.run_async(**kwargs):
+            yield event
+    except Exception:
+        await on_failure(redis, "llm")
+        raise
+    else:
+        await on_success(redis, "llm")

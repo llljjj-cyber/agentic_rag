@@ -17,14 +17,15 @@ coverage/
 
 # 数据库本地数据
 pgdata/
+redis/
 
 # 用户上传 & PDF 解析临时文件（保留目录结构）
-backend/services/rag/temp/**
-!backend/services/rag/temp/.gitkeep
-!backend/services/rag/temp/uploads/
-!backend/services/rag/temp/uploads/.gitkeep
-!backend/services/rag/temp/md-uploads/
-!backend/services/rag/temp/md-uploads/.gitkeep
+backend/infrastructure/rag/temp/**
+!backend/infrastructure/rag/temp/.gitkeep
+!backend/infrastructure/rag/temp/uploads/
+!backend/infrastructure/rag/temp/uploads/.gitkeep
+!backend/infrastructure/rag/temp/md-uploads/
+!backend/infrastructure/rag/temp/md-uploads/.gitkeep
 
 # Node 前端
 frontend/node_modules/
@@ -41,7 +42,7 @@ models/
 # 练习
 practice/
 finddata
-
+new_frontend/
 
 # IDE / 系统
 .vscode/

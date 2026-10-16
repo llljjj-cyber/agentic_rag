@@ -18,9 +18,16 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379/0"
     redis_enabled: bool = True
+
     source_cache_ttl_seconds: int = 300
     space_snapshot_cache_ttl_seconds: int = 300
     shelf_cache_ttl_seconds: int = 300
+    rate_limit_per_second: int = 10
+    rate_limit_burst: int = 20
+
+    circuit_failure_threshold: int = 5
+    circuit_recovery_seconds: int = 30
+    circuit_fail_window_seconds: int = 60
     
     api_key: str | None = None
     url: str | None = None

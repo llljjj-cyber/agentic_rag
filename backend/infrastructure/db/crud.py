@@ -239,6 +239,10 @@ async def get_shelf(db: AsyncSession, shelf_id: str) -> ShelfModel | None:
     result = await db.execute(select(ShelfModel).where(ShelfModel.id == shelf_id))
     return result.scalar_one_or_none()
 
+async def get_source_ids_by_shelf_id(db: AsyncSession, shelf_id: str) -> list[str]:
+    result = await db.execute(select(SourceModel.id).where(SourceModel.shelf_id == shelf_id))
+    return result.scalars().all()
+
 async def list_shelves_by_user_id(db: AsyncSession, user_id: str) -> list[ShelfModel]:
     q = (
         select(

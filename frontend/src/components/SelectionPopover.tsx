@@ -83,14 +83,19 @@ export default function SelectionPopover({
         : `请简要解释以下内容的含义（不超过150字）：\n「${snippet}」`;
 
     let assembled = "";
+    let streamError = "";
     try {
       await streamChat(token, { message: prompt, conv_id: null }, (payload) => {
-        if (payload.kind === "text") {
+        if (payload.kind === "error") {
+          streamError = payload.message;
+          setResultBody(payload.message);
+        } else if (payload.kind === "text") {
           assembled += payload.text;
           setResultBody(assembled);
         }
       });
-      if (!assembled.trim()) setResultBody("未能获取结果，请重试。");
+      if (streamError) setResultBody(streamError);
+      else if (!assembled.trim()) setResultBody("未能获取结果，请重试。");
       setPanel("result");
     } catch (err) {
       setResultBody(err instanceof Error ? err.message : "请求失败");

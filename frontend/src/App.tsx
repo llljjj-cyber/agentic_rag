@@ -295,13 +295,15 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   }, [refreshShelves]);
 
   useEffect(() => {
-    const busy = (space?.sources ?? []).some((s) => isSourceBusy(s.status));
-    if (!busy) return;
+    // pending 只在 Redis，/space 往往看不到 busy；入库中也要靠 ingestJobs 驱动轮询
+    const busyInSpace = (space?.sources ?? []).some((s) => isSourceBusy(s.status));
+    const busyIngest = ingestJobs.some((job) => job.status === "processing");
+    if (!busyInSpace && !busyIngest) return;
     const id = window.setInterval(() => {
       refreshSpace().catch(() => undefined);
     }, 2500);
     return () => window.clearInterval(id);
-  }, [space?.sources, refreshSpace]);
+  }, [space?.sources, ingestJobs, refreshSpace]);
 
   useEffect(() => {
     if (!batchMode) return;
@@ -420,26 +422,14 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
 
     void (async () => {
       try {
+        // 链路 A：异步接单；链路 B：轮询 detail 至 ready（期间 ingestJobs=processing 会驱动 /space 刷新）
         const source = await ingestSource(token, input);
-
-        if (input.kind === "file") {
-          // 文件走异步入库：接单后轮询 detail，完成前保持「处理中」
-          await waitForSourceReady(token, source.id);
-          setIngestJobs((jobs) =>
-            jobs.map((job) => (job.id === jobId ? { ...job, status: "success" } : job)),
-          );
-          await refreshSpace();
-          await refreshShelves().catch(() => undefined);
-        } else {
-          setIngestJobs((jobs) =>
-            jobs.map((job) => (job.id === jobId ? { ...job, status: "success" } : job)),
-          );
-          await refreshSpace();
-          await refreshShelves().catch(() => undefined);
-          if (READABLE_MODALITIES.has(source.modality)) {
-            openReader(source);
-          }
-        }
+        await waitForSourceReady(token, source.id);
+        setIngestJobs((jobs) =>
+          jobs.map((job) => (job.id === jobId ? { ...job, status: "success" } : job)),
+        );
+        await refreshSpace();
+        await refreshShelves().catch(() => undefined);
 
         window.setTimeout(() => {
           setIngestJobs((jobs) => jobs.filter((job) => job.id !== jobId));
@@ -702,6 +692,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
 
     let nextConvId = activeConvId;
     let assembled = "";
+    let streamError = "";
 
     try {
       await streamChat(token, { message: msg, conv_id: activeConvId }, (payload) => {
@@ -735,13 +726,19 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
           }
           setWarehouseView("spatial");
           if (!isReading && layoutMode === "warehouse") setLayoutMode("balanced");
+        } else if (payload.kind === "error") {
+          streamError = payload.message;
+          setStreamingText("");
         } else if (payload.kind === "text") {
           assembled += payload.text;
           setStreamingText(assembled);
         }
       });
 
-      if (assembled.trim()) {
+      if (streamError) {
+        setStreamingText("");
+        setError(streamError);
+      } else if (assembled.trim()) {
         setStreamingText("");
         setMessages((cur) => [
           ...cur,

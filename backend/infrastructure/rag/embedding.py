@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from starlette.concurrency import run_in_threadpool
 
 from backend.config import settings
-
+from backend.core.circuit_breaker import with_circuit_breaker
 
 BATCH_SIZE = 20
 API_KEY = settings.siliconflow_api_key
@@ -142,7 +142,9 @@ async def get_bgem3_doc_embeddings(
     colbert: bool = True,
     batch_size: int = BATCH_SIZE):
     if API_KEY:
-        return await _doc_embeddings_with_api(documents, batch_size)
+        async def _do():
+            return await _doc_embeddings_with_api(documents, batch_size)
+        return await with_circuit_breaker("embedding_api", _do)
     return await run_in_threadpool(_doc_embedding, documents, dense=dense, sparse=sparse, colbert=colbert, batch_size=batch_size)
 
 async def get_bgem3_text_embeddings(
@@ -151,5 +153,7 @@ async def get_bgem3_text_embeddings(
     sparse: bool = True, 
     colbert: bool = True):
     if API_KEY:
-        return await _text_embeddings_with_api(text)
+        async def _do():
+            return await _text_embeddings_with_api(text)
+        return await with_circuit_breaker("embedding_api", _do)
     return await run_in_threadpool(_text_embedding, text, dense=dense, sparse=sparse, colbert=colbert)

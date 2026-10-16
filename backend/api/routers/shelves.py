@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.api.deps.auth import get_current_user
+from backend.api.deps import get_current_user
 from backend.services import shelf_service 
 from backend.api.schemas import ShelfRenameRequest, ShelfRequest
 

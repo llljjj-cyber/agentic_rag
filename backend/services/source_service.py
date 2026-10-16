@@ -3,6 +3,7 @@ from pathlib import Path
 import uuid
 from backend.api.schemas import SourceOut
 from backend.config import settings
+from backend.core.logging import bind_extra, get_logger, get_request_id
 from backend.infrastructure.db import crud
 from backend.infrastructure.db.database import async_session
 from backend.infrastructure.kafka import producer as mq
@@ -11,23 +12,60 @@ from backend.infrastructure.redis.add_source import cache_get_source, compensate
 from backend.infrastructure.redis.shelf import delete_cached_shelves
 from backend.infrastructure.redis.space_snapshot import delete_cached_space_snapshot
 
+logger = get_logger(__name__)
+
 
 async def auto_add_source(payload: dict) -> dict:
-    payload["source_id"] = str(uuid.uuid4().hex[:10])
-    payload["retry"] = 0 
+    payload["id"] = str(uuid.uuid4().hex[:10])
+    payload["retry"] = 0
     payload["created_at"] = datetime.now(timezone.utc).isoformat()
+    rid = get_request_id()
+    if rid:
+        payload["request_id"] = rid
     modality = payload.get("modality", "")
     if not modality:
         raise ValueError("modality is required")
+
+    result = await source_add(payload)
+    if not result.get("ok"):
+        logger.warning(
+            "source pending cache failed",
+            extra=bind_extra(
+                user_id=payload.get("user_id"),
+                source_id=payload.get("id"),
+                modality=modality,
+                code=result.get("CODE"),
+            ),
+        )
+        return result
+
     try:
         await mq.publish(
             settings.topic_add_source,
             payload,
         )
-        result = await source_add(payload)
-    except Exception:
-        await compensate_source_add(payload["user_id"], payload["source_id"])
+    except Exception as exc:
+        await compensate_source_add(payload["user_id"], payload["id"])
+        logger.exception(
+            "source kafka publish failed",
+            extra=bind_extra(
+                user_id=payload.get("user_id"),
+                source_id=payload.get("id"),
+                modality=modality,
+                code="KAFKA_ERROR",
+                error=str(exc),
+            ),
+        )
         return {"ok": False, "CODE": "KAFKA_ERROR"}
+
+    logger.info(
+        "source queued",
+        extra=bind_extra(
+            user_id=payload.get("user_id"),
+            source_id=payload.get("id"),
+            modality=modality,
+        ),
+    )
     return {**result}
 
 

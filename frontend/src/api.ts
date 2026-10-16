@@ -1,4 +1,4 @@
-export const API = import.meta.env.VITE_API_URL;
+export const API = import.meta.env.VITE_API_URL ?? "";
 
 export type Conversation = {
   id: number;
@@ -275,6 +275,8 @@ export type RetrievalMatch = {
 type StreamMeta = {
   conv_id?: number;
   type?: string;
+  error?: string;
+  detail?: string;
   query_point?: SpacePoint;
   matches?: Array<{
     source_id?: string;
@@ -297,8 +299,16 @@ export type SpacePoint = {
 export type StreamPayload =
   | { kind: "conv_id"; convId: number }
   | { kind: "retrieval"; query_point?: SpacePoint; matches: RetrievalMatch[]; space?: unknown }
+  | { kind: "error"; code: string; detail?: string; message: string }
   | { kind: "text"; text: string }
   | { kind: "done" };
+
+export function formatStreamError(code: string, detail?: string): string {
+  if (code === "llm_unavailable") {
+    return "模型服务暂时不可用（已触发熔断保护），请稍后重试。";
+  }
+  return detail?.trim() || "对话失败，请稍后重试。";
+}
 
 function normalizeRetrievalMatches(
   matches: StreamMeta["matches"],
@@ -328,6 +338,17 @@ export function parseStreamPayload(raw: string): StreamPayload | null {
       const meta = JSON.parse(payload) as StreamMeta;
       if (typeof meta.conv_id === "number") {
         return { kind: "conv_id", convId: meta.conv_id };
+      }
+      if (typeof meta.error === "string" && meta.error) {
+        return {
+          kind: "error",
+          code: meta.error,
+          detail: typeof meta.detail === "string" ? meta.detail : undefined,
+          message: formatStreamError(
+            meta.error,
+            typeof meta.detail === "string" ? meta.detail : undefined,
+          ),
+        };
       }
       if (meta.type === "retrieval") {
         return {

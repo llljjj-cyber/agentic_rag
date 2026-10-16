@@ -3,12 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.infrastructure.db import crud
 from backend.infrastructure.db.database import SESSION_SERVICE, get_db
-from backend.api.deps.auth import get_current_user
+from backend.api.deps import get_current_user, rate_limit_dep
 from backend.api.schemas import ConvRenameRequest, Conversation, Message, User
 from backend.infrastructure.agent.agent_runtime import APP_NAME
 
 
-router = APIRouter(prefix="/conversations", tags=["会话"])
+router = APIRouter(prefix="/conversations", tags=["会话"], dependencies=[Depends(rate_limit_dep)])
 
 
 @router.get("", response_model=list[Conversation])
